@@ -15,6 +15,12 @@ const blogPostSchema = new mongoose.Schema({
     ref: 'Blogger',
     required: true,
   },
+  comments: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Comment',
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

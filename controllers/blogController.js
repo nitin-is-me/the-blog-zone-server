@@ -1,5 +1,6 @@
 const BlogPost = require('../models/BlogPost');
 const jwt = require("jsonwebtoken");
+const Comment = require('../models/Comment');
 // Create a new blog post
 exports.postBlog = async (req, res) => {
   try {
@@ -51,7 +52,15 @@ exports.getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const blog = await BlogPost.findById(id).populate('author', 'username name');
+    // Fetching the blog post along with its populated comments (content, author, etc.)
+    const blog = await BlogPost.findById(id)
+      .populate('author', 'username name')
+      .populate({
+        path: 'comments', 
+        select: 'content createdAt', 
+        populate: { path: 'author', select: 'name username' } 
+      });
+
     if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
     }
@@ -63,6 +72,7 @@ exports.getBlogById = async (req, res) => {
   }
 };
 
+
 exports.deleteBlog = async (req, res) =>{
   try{
     const {id} = req.params;
@@ -73,3 +83,55 @@ exports.deleteBlog = async (req, res) =>{
     res.status(500).json({message: "Failed to delete post"});
   }
 }
+
+exports.postComment = async(req, res)=>{
+  const {postId} = req.params;
+  const {content} = req.body;
+
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: 'You must be logged in to create a comment.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const authorId = decoded.id; // The user id, needed for creating comment (author is object id)
+    const comment = await Comment.create({
+      content,
+      author: authorId,
+      post: postId
+    });
+
+    await BlogPost.findByIdAndUpdate(postId,{
+      $push:{comments: comment._id}
+    });
+
+    res.status(201).json(comment)
+  } catch(error){
+    res.status(500).json({ message: 'Failed to add comment', error });
+  }
+}
+
+exports.deleteComment = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+
+    // Delete the comment from the Comment collection
+    const comment = await Comment.findByIdAndDelete(commentId);
+
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    // Update the BlogPost collection to remove the deleted comment reference
+    await BlogPost.updateOne(
+      { comments: commentId }, // Find the blog post that contains this comment
+      { $pull: { comments: commentId } } // Remove the comment ID from the blog post's comments array
+    );
+
+    res.status(200).send("Deleted successfully");
+  } catch (error) {
+    console.error("Error deleting comment", error);
+    res.status(500).send("Error deleting comment");
+  }
+};

@@ -1,5 +1,5 @@
 const express = require('express');
-const { postBlog, getBlogs, getBlogById, deleteBlog } = require('../controllers/blogController');
+const { postBlog, getBlogs, getBlogById, deleteBlog, postComment, deleteComment } = require('../controllers/blogController');
 const authenticate = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -10,6 +10,10 @@ router.get('/', getBlogs);
 
 router.get('/:id', getBlogById);
 
-router.delete('/delete/:id', deleteBlog)
+router.delete('/delete/:id', deleteBlog);
+
+router.post("/:postId/comments", postComment);
+
+router.delete("/comment/:commentId", deleteComment);
 
 module.exports = router;
