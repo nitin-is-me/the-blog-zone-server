@@ -4,7 +4,7 @@ const Comment = require('../models/Comment');
 // Create a new blog post
 exports.postBlog = async (req, res) => {
   try {
-    const { title, content } = req.body;
+    const { title, content, private } = req.body;
 
     // Extracting user info from the jwt
     const token = req.headers.authorization?.split(" ")[1];
@@ -19,7 +19,8 @@ exports.postBlog = async (req, res) => {
     const newPost = new BlogPost({
       title,
       content,
-      author: authorId, 
+      author: authorId,
+      private
     });
 
     const savedPost = await newPost.save();
@@ -36,7 +37,7 @@ exports.postBlog = async (req, res) => {
 // Fetching all blog posts
 exports.getBlogs = async (req, res) => {
   try {
-    const blogs = await BlogPost.find()
+    const blogs = await BlogPost.find({private: false})
       .populate('author', 'username name') // Populate author with username and name
       .sort({ createdAt: -1 }); // Sort by latest posts
 
@@ -44,6 +45,24 @@ exports.getBlogs = async (req, res) => {
   } catch (error) {
     console.error('Error fetching blogs:', error);
     res.status(500).json({ message: 'Failed to fetch blogs' });
+  }
+};
+
+exports.getPrivateBlogs = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: 'You must be logged in to create a post.' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+    const privatePosts = await BlogPost.find({ author: userId, private: true })
+    .populate('author', 'username name')
+    .sort({ createdAt: -1 });
+    res.status(200).json(privatePosts);
+  } catch (error) {
+    console.error("Error fetching private posts:", error);
+    res.status(500).json({ error: "Failed to fetch private posts." });
   }
 };
 

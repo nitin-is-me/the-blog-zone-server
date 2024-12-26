@@ -21,6 +21,10 @@ const blogPostSchema = new mongoose.Schema({
       ref: 'Comment',
     },
   ],
+  private: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
