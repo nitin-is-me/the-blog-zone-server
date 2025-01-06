@@ -1,5 +1,5 @@
 const express = require('express');
-const { postBlog, getBlogs, getBlogById, deleteBlog, postComment, deleteComment, getPrivateBlogs } = require('../controllers/blogController');
+const { postBlog, getBlogs, getBlogById, deleteBlog, postComment, deleteComment, getPrivateBlogs, editBlog } = require('../controllers/blogController');
 const authenticate = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -11,6 +11,8 @@ router.get('/', getBlogs);
 router.get('/:id', getBlogById);
 
 router.delete('/delete/:id', deleteBlog);
+
+router.put('/edit/:id', editBlog);
 
 router.post("/:postId/comments", postComment);
 

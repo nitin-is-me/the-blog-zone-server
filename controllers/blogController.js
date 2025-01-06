@@ -154,3 +154,40 @@ exports.deleteComment = async (req, res) => {
     res.status(500).send("Error deleting comment");
   }
 };
+
+exports.editBlog = async (req, res) => {
+  try {
+    const { id } = req.params; 
+    const { title, content, private } = req.body; // New data to update
+
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "You must be logged in to edit a post." });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+
+    const blog = await BlogPost.findById(id);
+
+    if (!blog) {
+      return res.status(404).json({ message: "Blog post not found" });
+    }
+
+    if (blog.author.toString() !== userId) {
+      return res.status(403).json({ message: "You are not authorized to edit this post." });
+    }
+
+    // Update the blog post
+    blog.title = title || blog.title;
+    blog.content = content || blog.content;
+    blog.private = private !== undefined ? private : blog.private;
+
+    const updatedBlog = await blog.save();
+    res.status(200).json({ message: "Blog post updated successfully!", blog: updatedBlog });
+  } catch (error) {
+    console.error("Error updating blog post:", error);
+    res.status(500).json({ message: "Failed to update blog post" });
+  }
+};
