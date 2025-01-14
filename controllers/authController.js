@@ -19,7 +19,7 @@ exports.signup = async (req, res) => {
   const user = await Blogger.findOne({username});
 // Generating JWT
   const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "365d",
   });
 
   res.status(201).json({ token, message: "user registered successfully" });
@@ -42,7 +42,7 @@ exports.login = async (req, res) => {
 
   // Generating JWT
   const token = jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: "365d",
   });
 
   res.json({ token });
