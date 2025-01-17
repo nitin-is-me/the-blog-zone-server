@@ -1,6 +1,8 @@
 const BlogPost = require('../models/BlogPost');
 const jwt = require("jsonwebtoken");
 const Comment = require('../models/Comment');
+const Blogger = require('../models/Blogger');
+
 // Create a new blog post
 exports.postBlog = async (req, res) => {
   try {
@@ -16,17 +18,16 @@ exports.postBlog = async (req, res) => {
     const authorId = decoded.id; // The user id, needed for creating post (author is object id)
 
     // Creating a new blog post with the author's ID
-    const newPost = new BlogPost({
+    const newPost = await BlogPost.create({
       title,
       content,
-      author: authorId,
+      authorId,
       private
     });
 
-    const savedPost = await newPost.save();
     res.status(201).json({
       message: 'Blog post created successfully!',
-      blog: savedPost,
+      blog: newPost,
     });
   } catch (error) {
     console.error('Error creating blog post:', error);
@@ -37,9 +38,24 @@ exports.postBlog = async (req, res) => {
 // Fetching all blog posts
 exports.getBlogs = async (req, res) => {
   try {
-    const blogs = await BlogPost.find({private: false})
-      .populate('author', 'username name') // Populate author with username and name
-      .sort({ createdAt: -1 }); // Sort by latest posts
+    const blogs = await BlogPost.findAll({
+      where: { private: false },
+      include: [
+        {
+          model: Blogger,
+          attributes: ['username', 'name'],
+        },
+        {
+          model: Comment,
+          attributes: ['content', 'createdAt'],
+          include: {
+            model: Blogger,
+            attributes: ['name', 'username'],
+          },
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
 
     res.status(200).json(blogs);
   } catch (error) {
@@ -48,17 +64,27 @@ exports.getBlogs = async (req, res) => {
   }
 };
 
+// Fetching private blogs for a specific user
 exports.getPrivateBlogs = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      return res.status(401).json({ message: 'You must be logged in to create a post.' });
+      return res.status(401).json({ message: 'You must be logged in to fetch private posts.' });
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
-    const privatePosts = await BlogPost.find({ author: userId, private: true })
-    .populate('author', 'username name')
-    .sort({ createdAt: -1 });
+
+    const privatePosts = await BlogPost.findAll({
+      where: { authorId: userId, private: true },
+      include: [
+        {
+          model: Blogger,
+          attributes: ['username', 'name'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
     res.status(200).json(privatePosts);
   } catch (error) {
     console.error("Error fetching private posts:", error);
@@ -71,14 +97,22 @@ exports.getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Fetching the blog post along with its populated comments (content, author, etc.)
-    const blog = await BlogPost.findById(id)
-      .populate('author', 'username name')
-      .populate({
-        path: 'comments', 
-        select: 'content createdAt', 
-        populate: { path: 'author', select: 'name username' } 
-      });
+    const blog = await BlogPost.findByPk(id, {
+      include: [
+        {
+          model: Blogger,
+          attributes: ['username', 'name'],
+        },
+        {
+          model: Comment,
+          attributes: ['id', 'content', 'createdAt'],
+          include: {
+            model: Blogger,
+            attributes: ['name', 'username'],
+          },
+        },
+      ],
+    });
 
     if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
@@ -91,21 +125,28 @@ exports.getBlogById = async (req, res) => {
   }
 };
 
+// Delete a blog post
+exports.deleteBlog = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const blog = await BlogPost.findByPk(id);
 
-exports.deleteBlog = async (req, res) =>{
-  try{
-    const {id} = req.params;
-    const blog = await BlogPost.findByIdAndDelete(id);
-    res.status(200).send("Deleted successfully")
-  } catch(error){
+    if (!blog) {
+      return res.status(404).json({ message: 'Blog post not found' });
+    }
+
+    await blog.destroy();
+    res.status(200).send("Deleted successfully");
+  } catch (error) {
     console.error("Error deleting post:", error);
-    res.status(500).json({message: "Failed to delete post"});
+    res.status(500).json({ message: "Failed to delete post" });
   }
-}
+};
 
-exports.postComment = async(req, res)=>{
-  const {postId} = req.params;
-  const {content} = req.body;
+// Post a comment on a blog post
+exports.postComment = async (req, res) => {
+  const { postId } = req.params;
+  const { content } = req.body;
 
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -114,51 +155,56 @@ exports.postComment = async(req, res)=>{
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const authorId = decoded.id; // The user id, needed for creating comment (author is object id)
+    const authorId = decoded.id;
+
     const comment = await Comment.create({
       content,
-      author: authorId,
-      post: postId
+      authorId,
+      postId
     });
 
-    await BlogPost.findByIdAndUpdate(postId,{
-      $push:{comments: comment._id}
-    });
+    const blog = await BlogPost.findByPk(postId);
+    if (!blog) {
+      return res.status(404).json({ message: "Blog post not found" });
+    }
 
-    res.status(201).json(comment)
-  } catch(error){
-    res.status(500).json({ message: 'Failed to add comment', error });
+    await blog.addComment(comment);
+
+    res.status(201).json(comment);
+  } catch (error) {
+    console.error("Error adding comment", error);
+    res.status(500).json({ message: 'Failed to add comment' });
   }
-}
+};
 
+// Delete a comment
 exports.deleteComment = async (req, res) => {
   try {
     const { commentId } = req.params;
 
-    // Delete the comment from the Comment collection
-    const comment = await Comment.findByIdAndDelete(commentId);
+    // Find the comment
+    const comment = await Comment.findByPk(commentId);
 
     if (!comment) {
       return res.status(404).json({ message: "Comment not found" });
     }
 
-    // Update the BlogPost collection to remove the deleted comment reference
-    await BlogPost.updateOne(
-      { comments: commentId }, // Find the blog post that contains this comment
-      { $pull: { comments: commentId } } // Remove the comment ID from the blog post's comments array
-    );
+    // Delete the comment
+    await comment.destroy();
 
-    res.status(200).send("Deleted successfully");
+    res.status(200).json({ message: "Deleted successfully" });
   } catch (error) {
     console.error("Error deleting comment", error);
-    res.status(500).send("Error deleting comment");
+    res.status(500).json({ message: "Error deleting comment" });
   }
 };
 
+
+// Edit an existing blog post
 exports.editBlog = async (req, res) => {
   try {
-    const { id } = req.params; 
-    const { title, content, private } = req.body; // New data to update
+    const { id } = req.params;
+    const { title, content, private } = req.body;
 
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
@@ -168,14 +214,13 @@ exports.editBlog = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
 
-
-    const blog = await BlogPost.findById(id);
+    const blog = await BlogPost.findByPk(id);
 
     if (!blog) {
       return res.status(404).json({ message: "Blog post not found" });
     }
 
-    if (blog.author.toString() !== userId) {
+    if (blog.authorId !== userId) {
       return res.status(403).json({ message: "You are not authorized to edit this post." });
     }
 

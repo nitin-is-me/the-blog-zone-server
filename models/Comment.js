@@ -1,26 +1,29 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require("sequelize");
+const sequelize = require("../database");
+const Blogger = require("./Blogger");
+const BlogPost = require("./BlogPost");
 
-const commentSchema = new mongoose.Schema({
+const Comment = sequelize.define("Comment", {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   content: {
-    type: String,
-    required: true,
-  },
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Blogger',
-    required: true,
-  },
-  post: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'BlogPost',
-    required: true,
+    type: DataTypes.TEXT,
+    allowNull: false,
   },
   createdAt: {
-    type: Date,
-    default: Date.now,
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
   },
 });
 
-const Comment = mongoose.model('Comment', commentSchema);
+// Associations
+Blogger.hasMany(Comment, { foreignKey: "authorId", onDelete: "CASCADE" });
+Comment.belongsTo(Blogger, { foreignKey: "authorId" });
+
+BlogPost.hasMany(Comment, { foreignKey: "postId", onDelete: "CASCADE" });
+Comment.belongsTo(BlogPost, { foreignKey: "postId" });
 
 module.exports = Comment;

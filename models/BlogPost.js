@@ -1,39 +1,36 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require("sequelize");
+const sequelize = require("../database");
+const Blogger = require("./Blogger");
 
-const blogPostSchema = new mongoose.Schema({
+const BlogPost = sequelize.define("BlogPost", {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   title: {
-    type: String,
-    required: true,
-    maxlength: 255,
+    type: DataTypes.STRING,
+    allowNull: false,
   },
   content: {
-    type: String,
-    required: true,
+    type: DataTypes.TEXT,
+    allowNull: false,
   },
-  author: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Blogger',
-    required: true,
-  },
-  comments: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Comment',
-    },
-  ],
   private: {
-    type: Boolean,
-    default: false,
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
   },
   createdAt: {
-    type: Date,
-    default: Date.now,
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
   },
   updatedAt: {
-    type: Date,
+    type: DataTypes.DATE,
   },
 });
 
-const BlogPost = mongoose.model('BlogPost', blogPostSchema);
+// Associations
+Blogger.hasMany(BlogPost, { foreignKey: "authorId", onDelete: "CASCADE" });
+BlogPost.belongsTo(Blogger, { foreignKey: "authorId" });
 
 module.exports = BlogPost;
