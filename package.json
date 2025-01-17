@@ -4,8 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "server": "node --env-file=.env server.js",
-    "postinstall": "echo Installing pg... && npm install pg"
+    "server": "node --env-file=.env server.js"
   },
   "keywords": [],
   "author": "",
