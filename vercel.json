@@ -11,5 +11,10 @@
       "src": "/(.*)",
       "dest": "server.js"
      }
-    ]
+    ],
+    "env":{
+        "PORT": "8000",
+        "POSTGRES_URI": "postgresql://postgres.npnnyzlarwufyumoflsj:WebDeveloperHoon@aws-0-us-west-1.pooler.supabase.com:5432/postgres",
+        "JWT_SECRET": "oklmaohaha"
+    }
    }
