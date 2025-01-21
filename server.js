@@ -18,7 +18,11 @@ app.use("/api/blog", blogRouter);
   try {
     await sequelize.authenticate();
     console.log("Connected to PostgreSQL");
-    await sequelize.sync({ alter: true }); // Sync models with the database
+    if(process.env.NODE_ENV === "development"){
+    await sequelize.sync({ alter: true }); // Sync models with the database (only while development)
+    console.log("Models synchronized with database");
+    }
+
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (error) {
     console.error("Database connection error:", error);
