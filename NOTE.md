@@ -16,7 +16,7 @@ const sequelize = new Sequelize({
 module.exports = sequelize;
 ```
 
-It may throw unexpected errors, so we've to add a few lines, so that the database.js looks this this:
+When hosting the database online, it may throw unexpected errors, so we've to add a few lines, so that the database.js looks this this:
 ```
 const { Sequelize } = require("sequelize");
 const pg = require("pg"); // we have to manually import pg module, or it throws error : "Manually install pg"
