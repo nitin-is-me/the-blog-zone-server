@@ -129,12 +129,24 @@ exports.getBlogById = async (req, res) => {
 exports.deleteBlog = async (req, res) => {
   try {
     const { id } = req.params;
+    const token = req.headers.authorization?.split(" ")[1];
+    if(!token){
+      return res.status(401).json({ message: 'You must be logged in to delete a post.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+    
     const blog = await BlogPost.findByPk(id);
 
     if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
     }
 
+    if (blog.authorId !== userId) {
+      return res.status(403).json({ message: 'You are not authorized to delete this post.' });
+    }
+    
     await blog.destroy();
     res.status(200).send("Deleted successfully");
   } catch (error) {
@@ -180,6 +192,13 @@ exports.postComment = async (req, res) => {
 // Delete a comment
 exports.deleteComment = async (req, res) => {
   try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: 'You must be logged in to create a comment.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const authorId = decoded.id;
     const { commentId } = req.params;
 
     // Find the comment
@@ -187,6 +206,10 @@ exports.deleteComment = async (req, res) => {
 
     if (!comment) {
       return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.authorId !== authorId){
+      return res.status(401).json({ message: "You must be logged in to delete your comment});
     }
 
     // Delete the comment
