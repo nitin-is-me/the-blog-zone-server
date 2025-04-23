@@ -209,7 +209,7 @@ exports.deleteComment = async (req, res) => {
     }
 
     if (comment.authorId !== authorId){
-      return res.status(401).json({ message: "You must be logged in to delete your comment});
+      return res.status(401).json({ message: "You must be logged in to delete your comment"});
     }
 
     // Delete the comment
