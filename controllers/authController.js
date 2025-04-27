@@ -125,7 +125,7 @@ exports.updateProfile = async (req, res) => {
 
     const existingUser = await Blogger.findOne({ where: { username: newUsername } });
     if (existingUser) {
-      return res.status(400).send("Username already exists!");
+      return res.status(400).send({ message: "Username already exists!" });
     }
 
 
