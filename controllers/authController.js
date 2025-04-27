@@ -63,7 +63,7 @@ exports.verifyToken = (req, res) => {
 
 exports.user = (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
-  
+
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
   try {
@@ -97,5 +97,84 @@ exports.me = async (req, res) => {
   } catch (error) {
     console.error("Error verifying token:", error);
     return res.status(401).json({ error: "Invalid or expired token" });
+  }
+};
+
+
+exports.updateProfile = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    // Verify the JWT
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Get fields to update from request body
+    const { name } = req.body;
+
+    // Find the user
+    const user = await Blogger.findOne({ where: { username: decoded.username } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Update user fields if provided
+    if (name) user.name = name;
+
+    // Save changes
+    await user.save();
+
+    return res.status(200).json({
+      message: "Profile updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    return res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    // Verify the JWT
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Get new password from request body
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      return res.status(400).json({ error: "New password is required" });
+    }
+
+    // Find the user
+    const user = await Blogger.findOne({ where: { username: decoded.username } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    user.password = hashedPassword;
+    await user.save();
+
+    return res.status(200).json({ message: "Password updated successfully" });
+
+  } catch (error) {
+    console.error("Error changing password:", error);
+    return res.status(500).json({ error: "Failed to change password" });
   }
 };
