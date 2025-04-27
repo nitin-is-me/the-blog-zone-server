@@ -93,6 +93,7 @@ exports.me = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+
     return res.json(user);
   } catch (error) {
     console.error("Error verifying token:", error);
@@ -114,21 +115,35 @@ exports.updateProfile = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Get fields to update from request body
-    const { name } = req.body;
+    const { name, newUsername } = req.body;
 
     // Find the user
-    const user = await Blogger.findOne({ where: { username: decoded.username } });
+    const user = await Blogger.findOne({ where: { id: decoded.id } });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const existingUser = await Blogger.findOne({ where: { username: newUsername } });
+    if (existingUser) {
+      return res.status(400).send("Username already exists!");
+    }
+
+
+
     // Update user fields if provided
     if (name) user.name = name;
+    if (newUsername) user.username = newUsername;
 
+    const newTtoken = jwt.sign({ id: decoded.id, username: newUsername }, process.env.JWT_SECRET, {
+      expiresIn: "365d",
+    });
     // Save changes
     await user.save();
 
+    // Return updated user info (excluding password)
+
     return res.status(200).json({
+      token: newTtoken,
       message: "Profile updated successfully"
     });
 
