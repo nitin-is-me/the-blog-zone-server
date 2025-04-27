@@ -102,76 +102,57 @@ exports.me = async (req, res) => {
 };
 
 
-const updateProfile = async (e) => {
-  e.preventDefault();
-  setUpdating(true);
-  setError("");
-  setSuccess("");
-
-  if (/\s/.test(formData.newUsername)) {
-    setError("Username cannot contain spaces");
-    setUpdating(false);
-    return;
+exports.updateProfile = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
-  let token = localStorage.getItem("token");
+  const token = authHeader.split(" ")[1];
+
   try {
-    const trimmedName = formData.name.trim();
-    const payload = {
-      name: trimmedName
-    };
+    // Verify the JWT
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Only include newUsername in the payload if it's different from the current username
-    if (formData.newUsername !== formData.username) {
-      payload.newUsername = formData.newUsername;
+    // Get fields to update from request body
+    const { name, newUsername } = req.body;
+
+    // Find the user
+    const user = await Blogger.findOne({ where: { id: decoded.id } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const response = await axios.put(
-      "https://the-blog-zone-server.vercel.app/api/auth/updateProfile",
-      payload,
-      {
-        headers: { Authorization: `Bearer ${token}` }
+    // Only check for existing username if newUsername is provided and different from current
+    if (newUsername && newUsername !== user.username) {
+      const existingUser = await Blogger.findOne({ where: { username: newUsername } });
+      if (existingUser) {
+        return res.status(400).send("Username already exists!");
       }
-    );
-    
-    // Store the new token (to update our username in jwt stored locally)
-    if (response.data.token) {
-      localStorage.setItem("token", response.data.token);
-    }
-    
-    // Update all relevant state
-    const updatedUser = {
-      ...currentUser,
-      name: trimmedName,
-    };
-
-    // Only update username if it was changed
-    if (formData.newUsername !== formData.username) {
-      updatedUser.username = formData.newUsername;
+      user.username = newUsername;
     }
 
-    setCurrentUser(updatedUser);
+    // Update user fields if provided
+    if (name) user.name = name;
 
-    setFormData(prev => ({
-      ...prev,
-      name: trimmedName,
-      username: updatedUser.username,
-      newUsername: updatedUser.username
-    }));
+    const newToken = jwt.sign({ 
+      id: decoded.id, 
+      username: newUsername || user.username // Use new username if provided, otherwise keep current
+    }, process.env.JWT_SECRET, {
+      expiresIn: "365d",
+    });
 
-    setSuccess("Profile updated successfully!");
+    // Save changes
+    await user.save();
+
+    return res.status(200).json({
+      token: newToken,
+      message: "Profile updated successfully"
+    });
 
   } catch (error) {
-    console.error("Failed to update profile:", error);
-    setError(error.response?.data?.message || "Failed to update profile. Please try again.");
-
-    // If the error is due to an invalid token, redirect to login
-    if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      router.push("/");
-    }
-  } finally {
-    setUpdating(false);
+    console.error("Error updating profile:", error);
+    return res.status(500).json({ error: "Failed to update profile" });
   }
 };
 
