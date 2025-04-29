@@ -18,12 +18,13 @@ exports.postBlog = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const authorId = decoded.id; // The user id, needed for creating post (author is object id)
 
-    // Encrypt content if post is private
+    // Encrypt content and title if post is private
     const encryptedContent = private ? encrypt(content) : content;
+    const encryptedTitle = private ? encrypt(title) : title;
 
     // Creating a new blog post with the author's ID
     const newPost = await BlogPost.create({
-      title,
+      title: encryptedTitle,
       content: encryptedContent, // Store encrypted content if private
       authorId,
       private
@@ -32,6 +33,7 @@ exports.postBlog = async (req, res) => {
     // When returning the newly created post, decrypt if needed
     const responsePost = {
       ...newPost.get({ plain: true }),
+      title: private ? title : newPost.title, // Return original title to user
       content: private ? content : newPost.content // Return original content to user
     };
 
@@ -102,6 +104,7 @@ exports.getPrivateBlogs = async (req, res) => {
       const plainPost = post.get({ plain: true });
       return {
         ...plainPost,
+        title: decrypt(plainPost.title),
         content: decrypt(plainPost.content)
       };
     });
@@ -155,8 +158,9 @@ exports.getBlogById = async (req, res) => {
         return res.status(403).json({ message: 'You are not authorized to view this private post.' });
       }
 
-      // If authorized, decrypt the content
+      // If authorized, decrypt the content and title
       const plainBlog = blog.get({ plain: true });
+      plainBlog.title = decrypt(plainBlog.title);
       plainBlog.content = decrypt(plainBlog.content);
       return res.status(200).json(plainBlog);
     }
@@ -291,35 +295,40 @@ exports.editBlog = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to edit this post." });
     }
 
-    // Handle privacy status changes
+   // Handle privacy status changes and content updates
     let updatedContent = content || blog.content;
+    let updatedTitle = title || blog.title;
     
-    // If content is provided and privacy status is changing
-    if (content) {
-      // If changing from public to private, encrypt the content
-      if (!blog.private && private) {
-        updatedContent = encrypt(content);
-      } 
-      // If changing from private to public, first decrypt the existing content
-      else if (blog.private && private === false) {
-        updatedContent = content; // Use the new plaintext content
+    // If privacy status is changing or content/title is being updated
+    if (blog.private) {
+      // If currently private
+      if (private === false) {
+        // Changing to public - decrypt existing fields if no new values provided
+        updatedContent = content || decrypt(blog.content);
+        updatedTitle = title || decrypt(blog.title);
+      } else {
+        // Staying private
+        // If new content provided, encrypt it
+        if (content) {
+          updatedContent = encrypt(content);
+        }
+        // If new title provided, encrypt it
+        if (title) {
+          updatedTitle = encrypt(title);
+        }
       }
-      // If remaining private but updating content
-      else if (blog.private && (private === undefined || private === true)) {
-        updatedContent = encrypt(content);
+    } else {
+      // If currently public
+      if (private) {
+        // Changing to private - encrypt all fields
+        updatedContent = encrypt(content || blog.content);
+        updatedTitle = encrypt(title || blog.title);
       }
-    }
-    // If no new content but privacy is changing (public -> private)
-    else if (!blog.private && private) {
-      updatedContent = encrypt(blog.content);
-    }
-    // If no new content but privacy is changing (private -> public)
-    else if (blog.private && private === false) {
-      updatedContent = decrypt(blog.content);
+      // If staying public, no encryption needed
     }
 
     // Update the blog post
-    blog.title = title || blog.title;
+    blog.title = updatedTitle;
     blog.content = updatedContent;
     blog.private = private !== undefined ? private : blog.private;
 
@@ -328,6 +337,7 @@ exports.editBlog = async (req, res) => {
     // Return the decrypted content to the client
     const responseBlog = updatedBlog.get({ plain: true });
     if (responseBlog.private) {
+      responseBlog.title = decrypt(responseBlog.title);
       responseBlog.content = decrypt(responseBlog.content);
     }
     
