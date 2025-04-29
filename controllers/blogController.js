@@ -2,6 +2,7 @@ const BlogPost = require('../models/BlogPost');
 const jwt = require("jsonwebtoken");
 const Comment = require('../models/Comment');
 const Blogger = require('../models/Blogger');
+const { encrypt, decrypt } = require('../utils/crypto-utils'); // Import the crypto utilities
 
 // Create a new blog post
 exports.postBlog = async (req, res) => {
@@ -17,17 +18,26 @@ exports.postBlog = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const authorId = decoded.id; // The user id, needed for creating post (author is object id)
 
+    // Encrypt content if post is private
+    const encryptedContent = private ? encrypt(content) : content;
+
     // Creating a new blog post with the author's ID
     const newPost = await BlogPost.create({
       title,
-      content,
+      content: encryptedContent, // Store encrypted content if private
       authorId,
       private
     });
 
+    // When returning the newly created post, decrypt if needed
+    const responsePost = {
+      ...newPost.get({ plain: true }),
+      content: private ? content : newPost.content // Return original content to user
+    };
+
     res.status(201).json({
       message: 'Blog post created successfully!',
-      blog: newPost,
+      blog: responsePost,
     });
   } catch (error) {
     console.error('Error creating blog post:', error);
@@ -57,6 +67,8 @@ exports.getBlogs = async (req, res) => {
       order: [['createdAt', 'DESC']],
     });
 
+    // Public posts aren't encrypted, so no need to decrypt
+
     res.status(200).json(blogs);
   } catch (error) {
     console.error('Error fetching blogs:', error);
@@ -85,7 +97,16 @@ exports.getPrivateBlogs = async (req, res) => {
       order: [['createdAt', 'DESC']],
     });
 
-    res.status(200).json(privatePosts);
+    // Decrypt the content of each private post
+    const decryptedPosts = privatePosts.map(post => {
+      const plainPost = post.get({ plain: true });
+      return {
+        ...plainPost,
+        content: decrypt(plainPost.content)
+      };
+    });
+
+    res.status(200).json(decryptedPosts);
   } catch (error) {
     console.error("Error fetching private posts:", error);
     res.status(500).json({ error: "Failed to fetch private posts." });
@@ -118,6 +139,29 @@ exports.getBlogById = async (req, res) => {
       return res.status(404).json({ message: 'Blog post not found' });
     }
 
+    // Check if the post is private
+    if (blog.private) {
+      // If private, verify the user is authorized to view it
+      const token = req.headers.authorization?.split(" ")[1];
+      if (!token) {
+        return res.status(401).json({ message: 'You must be logged in to view private posts.' });
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.id;
+
+      // Check if the user is the author
+      if (blog.authorId !== userId) {
+        return res.status(403).json({ message: 'You are not authorized to view this private post.' });
+      }
+
+      // If authorized, decrypt the content
+      const plainBlog = blog.get({ plain: true });
+      plainBlog.content = decrypt(plainBlog.content);
+      return res.status(200).json(plainBlog);
+    }
+
+    // For public posts, no decryption needed
     res.status(200).json(blog);
   } catch (error) {
     console.error('Error fetching blog post:', error);
@@ -247,13 +291,50 @@ exports.editBlog = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to edit this post." });
     }
 
+    // Handle privacy status changes
+    let updatedContent = content || blog.content;
+    
+    // If content is provided and privacy status is changing
+    if (content) {
+      // If changing from public to private, encrypt the content
+      if (!blog.private && private) {
+        updatedContent = encrypt(content);
+      } 
+      // If changing from private to public, first decrypt the existing content
+      else if (blog.private && private === false) {
+        updatedContent = content; // Use the new plaintext content
+      }
+      // If remaining private but updating content
+      else if (blog.private && (private === undefined || private === true)) {
+        updatedContent = encrypt(content);
+      }
+    }
+    // If no new content but privacy is changing (public -> private)
+    else if (!blog.private && private) {
+      updatedContent = encrypt(blog.content);
+    }
+    // If no new content but privacy is changing (private -> public)
+    else if (blog.private && private === false) {
+      updatedContent = decrypt(blog.content);
+    }
+
     // Update the blog post
     blog.title = title || blog.title;
-    blog.content = content || blog.content;
+    blog.content = updatedContent;
     blog.private = private !== undefined ? private : blog.private;
 
     const updatedBlog = await blog.save();
-    res.status(200).json({ message: "Blog post updated successfully!", blog: updatedBlog });
+    
+    // Return the decrypted content to the client
+    const responseBlog = updatedBlog.get({ plain: true });
+    if (responseBlog.private) {
+      responseBlog.content = decrypt(responseBlog.content);
+    }
+    
+    res.status(200).json({ 
+      message: "Blog post updated successfully!", 
+      blog: responseBlog
+    });
   } catch (error) {
     console.error("Error updating blog post:", error);
     res.status(500).json({ message: "Failed to update blog post" });
