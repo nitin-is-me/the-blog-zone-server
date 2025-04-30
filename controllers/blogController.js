@@ -351,15 +351,3 @@ exports.editBlog = async (req, res) => {
   }
 };
 
-// for test and demo purposes
-exports.getAllBlogs = async(req, res)=>{
-   const blogs = await BlogPost.findAll({
-      include: [
-        {
-          model: Blogger,
-          attributes: ['username', 'name'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
-}
