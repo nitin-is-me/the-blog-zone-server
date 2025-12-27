@@ -62,7 +62,7 @@ exports.getBlogs = async (req, res) => {
           attributes: ['content', 'createdAt'],
           include: {
             model: Blogger,
-            attributes: ['name', 'username'],
+            attributes: ['name', 'username', 'createdAt'],
           },
         },
       ],
@@ -132,7 +132,7 @@ exports.getBlogById = async (req, res) => {
           attributes: ['id', 'content', 'createdAt'],
           include: {
             model: Blogger,
-            attributes: ['name', 'username'],
+            attributes: ['name', 'username', 'createdAt'],
           },
         },
       ],
