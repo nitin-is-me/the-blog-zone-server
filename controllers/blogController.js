@@ -55,7 +55,7 @@ exports.getBlogs = async (req, res) => {
       include: [
         {
           model: Blogger,
-          attributes: ['username', 'name'],
+          attributes: ['username', 'name', 'createdAt'],
         },
         {
           model: Comment,
@@ -125,7 +125,7 @@ exports.getBlogById = async (req, res) => {
       include: [
         {
           model: Blogger,
-          attributes: ['username', 'name'],
+          attributes: ['username', 'name', 'createdAt'],
         },
         {
           model: Comment,
